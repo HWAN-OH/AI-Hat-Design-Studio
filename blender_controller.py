@@ -2,24 +2,15 @@ import pandas as pd
 
 def generate_blender_script(design_plan, bom_df):
     """
-    Generates a Python script for Blender using an absolute path for reliability.
-    안정성을 위해 절대 경로를 사용하는 Blender용 Python 스크립트를 생성합니다.
+    Generates a robust Python script for Blender that directly manipulates the view,
+    avoiding context-sensitive operators.
     """
     
-    # --- IMPORTANT: User Action Required ---
-    # 사용자가 직접 수정해야 할 부분
+    # Script Header
     script_lines = [
         "import bpy",
         "import os",
-        "",
-        "# ====================================================================",
-        "# !!! 중요: 아래 경로를 당신의 실제 프로젝트 폴더 경로로 수정하세요 !!!",
-        "# 예시: 'C:/Users/YourName/Documents/AI-Hat-Design-Studio'",
-        "PROJECT_ROOT_PATH = 'REPLACE_WITH_YOUR_ABSOLUTE_PROJECT_PATH'",
-        "# ====================================================================",
-        "",
-        "if PROJECT_ROOT_PATH == 'REPLACE_WITH_YOUR_ABSOLUTE_PROJECT_PATH':",
-        "    raise Exception('Please set the PROJECT_ROOT_PATH variable in this script first.')",
+        "from mathutils import Vector",
         "",
         "# --- Clear existing mesh objects ---",
         "if bpy.context.active_object and bpy.context.active_object.mode != 'OBJECT':",
@@ -29,7 +20,11 @@ def generate_blender_script(design_plan, bom_df):
         "bpy.ops.object.delete()",
         "",
         "# --- Set up model directory ---",
-        "model_dir = os.path.join(PROJECT_ROOT_PATH, 'models')",
+        "try:",
+        "    script_dir = os.path.dirname(bpy.data.filepath)",
+        "except AttributeError:",
+        "    script_dir = ''",
+        "model_dir = os.path.join(script_dir, 'models')",
         "",
     ]
 
@@ -51,27 +46,57 @@ def generate_blender_script(design_plan, bom_df):
                 script_lines.append(f"    print(f'Warning: Model file not found for {part_name} at {{model_path}}')")
                 script_lines.append("")
 
-    # Context override for view_all operator
+    # --- FINAL, ROBUST FIX: Direct view manipulation ---
     script_lines.extend([
         "",
-        "# --- Fit view to all objects ---",
-        "def get_3d_view_context():",
-        "    for window in bpy.context.window_manager.windows:",
-        "        for area in window.screen.areas:",
-        "            if area.type == 'VIEW_3D':",
-        "                for region in area.regions:",
-        "                    if region.type == 'WINDOW':",
-        "                        return {'window': window, 'screen': window.screen, 'area': area, 'region': region}",
-        "    return None",
+        "bpy.context.view_layer.update()",
         "",
-        "context_3d = get_3d_view_context()",
-        "if context_3d:",
-        "    with bpy.context.temp_override(**context_3d):",
-        "        bpy.ops.object.select_all(action='SELECT')",
-        "        bpy.ops.view3d.view_all(center=False)",
-        "        bpy.ops.object.select_all(action='DESELECT')",
-        "else:",
-        "    print('Could not find a 3D Viewport to adjust the view.')"
+        "def frame_all():",
+        "    # Find the 3D view area",
+        "    area = next((a for a in bpy.context.screen.areas if a.type == 'VIEW_3D'), None)",
+        "    if not area:",
+        "        print('No 3D Viewport found.')",
+        "        return",
+        "",
+        "    # Get the 3D view region",
+        "    region = next((r for r in area.regions if r.type == 'WINDOW'), None)",
+        "    if not region:",
+        "        return",
+        "",
+        "    # Get all visible mesh objects in the scene",
+        "    visible_objects = [obj for obj in bpy.context.visible_objects if obj.type == 'MESH']",
+        "    if not visible_objects:",
+        "        return",
+        "",
+        "    # Calculate the bounding box of all objects",
+        "    min_coord = Vector((float('inf'), float('inf'), float('inf')))",
+        "    max_coord = Vector((float('-inf'), float('-inf'), float('-inf')))",
+        "",
+        "    for obj in visible_objects:",
+        "        for corner in obj.bound_box:",
+        "            world_corner = obj.matrix_world @ Vector(corner)",
+        "            min_coord.x = min(min_coord.x, world_corner.x)",
+        "            min_coord.y = min(min_coord.y, world_corner.y)",
+        "            min_coord.z = min(min_coord.z, world_corner.z)",
+        "            max_coord.x = max(max_coord.x, world_corner.x)",
+        "            max_coord.y = max(max_coord.y, world_corner.y)",
+        "            max_coord.z = max(max_coord.z, world_corner.z)",
+        "",
+        "    # Calculate center and size of the bounding box",
+        "    center = (min_coord + max_coord) / 2.0",
+        "    size = max((max_coord - min_coord).x, (max_coord - min_coord).y, (max_coord - min_coord).z)",
+        "",
+        "    # Override the context and set the view",
+        "    override = {'area': area, 'region': region}",
+        "    with bpy.context.temp_override(**override):",
+        "        space = area.spaces.active",
+        "        space.region_3d.view_location = center",
+        "        space.region_3d.view_distance = size * 2.0 # Adjust multiplier for better framing",
+        "        space.region_3d.view_rotation = Vector((1, 0, 0, 0)).to_quaternion() # Reset rotation",
+        "",
+        "frame_all()",
+        "print('Script finished.')"
     ])
+    # --- END OF FINAL FIX ---
 
     return "\n".join(script_lines)
