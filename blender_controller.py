@@ -3,7 +3,7 @@ import pandas as pd
 def generate_blender_script(design_plan, bom_df):
     """
     Generates a Python script for Blender based on the design plan.
-    디자인 계획에 따라 Blender에서 실행할 Python 스크립트를 생성합니다.
+    This version includes a context override to prevent view3d errors.
     """
     
     # Script Header
@@ -12,13 +12,15 @@ def generate_blender_script(design_plan, bom_df):
         "import os",
         "",
         "# --- Clear existing mesh objects ---",
+        "if bpy.context.active_object and bpy.context.active_object.mode != 'OBJECT':",
+        "    bpy.ops.object.mode_set(mode='OBJECT')",
         "bpy.ops.object.select_all(action='DESELECT')",
         "bpy.ops.object.select_by_type(type='MESH')",
         "bpy.ops.object.delete()",
         "",
         "# --- Set up model directory ---",
         "# Please place your 3D models in a 'models' subfolder",
-        "script_dir = os.path.dirname(os.path.realpath(__file__))",
+        "script_dir = os.path.dirname(bpy.data.filepath)",
         "model_dir = os.path.join(script_dir, 'models')",
         "",
     ]
@@ -42,10 +44,17 @@ def generate_blender_script(design_plan, bom_df):
                 script_lines.append(f"    print(f'Warning: Model file not found for {part_name} at {{model_path}}')")
                 script_lines.append("")
 
-    # Script Footer
-    script_lines.append("# --- Fit view to all objects ---")
-    script_lines.append("bpy.ops.object.select_all(action='SELECT')")
-    script_lines.append("bpy.ops.view3d.view_all(center=False)")
-    script_lines.append("bpy.ops.object.select_all(action='DESELECT')")
+    # --- FIX: Context override for view_all operator ---
+    script_lines.extend([
+        "",
+        "# --- Fit view to all objects with context override ---",
+        "bpy.ops.object.select_all(action='SELECT')",
+        "area = next((a for a in bpy.context.screen.areas if a.type == 'VIEW_3D'), None)",
+        "if area:",
+        "    with bpy.context.temp_override(area=area):",
+        "        bpy.ops.view3d.view_all(center=False)",
+        "bpy.ops.object.select_all(action='DESELECT')",
+    ])
+    # --- END OF FIX ---
 
     return "\n".join(script_lines)
