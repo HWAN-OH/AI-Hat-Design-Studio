@@ -53,7 +53,6 @@ async def parse_command_with_llm(command, key, persona, available_parts):
         st.error("Google AI API Key가 Streamlit Secrets에 등록되지 않았습니다.")
         return None
 
-    # --- FIX: Upgraded prompt for handling complex styles ---
     persona_prompt = f"""
     You are {persona.get('role', 'an AI assistant')}. Your personality is: {persona.get('personality', 'helpful')}.
     Your goal is to translate the user's command into a structured JSON action.
@@ -68,11 +67,7 @@ async def parse_command_with_llm(command, key, persona, available_parts):
     AVAILABLE PARTS:
     {json.dumps(available_parts, indent=2)}
 
-    Based on the user's command, decide which action to take.
-    - If it's a simple property change, use `change_property`.
-    - If it's a style change (e.g., "cowboy hat"), use `apply_style`. For this, you must look at your knowledge base, find the corresponding parts, and create a list of `change_part` actions. Find the best matching `model_file` from the AVAILABLE PARTS for each part change.
-
-    Your response MUST be a single, valid JSON object.
+    Based on the user's command, decide which action to take. Your response MUST be a single, valid JSON object.
 
     EXAMPLES:
     - User: "make the logo 2x bigger" -> {{"action": "change_property", "target": "logo", "property": "scale", "value": 2.0}}
@@ -105,17 +100,18 @@ if bom_df is not None and persona_config is not None:
     st.dataframe(bom_df)
 
     if st.button("초기 모델 조립", key="initial_assembly"):
+        # Load default parts for initial assembly
+        initial_parts = bom_df[bom_df['part_type'].isin(['Crown', 'Brim', 'Strap'])]
         parts_to_load = []
-        for index, row in bom_df.iterrows():
-            if row['part_type'] in ['Crown', 'Brim', 'Strap']: # Load default parts
-                parts_to_load.append({"type": row['part_type'], "model_file": row['model_file']})
+        for index, row in initial_parts.iterrows():
+            parts_to_load.append({"type": row['part_type'], "model_file": row['model_file']})
         st.session_state.hat_config['parts'] = parts_to_load
         st.success("초기 모델 준비 완료. 아래에 명령을 입력하세요.")
 
     if st.session_state.hat_config['parts']:
         st.markdown("---")
         st.header("Step 2: 대화형 디자인")
-        command = st.text_input("Forma에게 명령하세요 (예: 'make it a cowboy hat' or 'logo bigger')")
+        command = st.text_input("Forma에게 명령하세요 (예: 'make it a cowboy hat')")
 
         if command:
             if not api_key:
@@ -125,11 +121,24 @@ if bom_df is not None and persona_config is not None:
                     available_parts_list = bom_df.to_dict('records')
                     parsed_command = asyncio.run(parse_command_with_llm(command, api_key, persona_config, available_parts_list))
                 
-                if parsed_command:
+                # --- FIX: Simplified and robust if/else structure ---
+                if parsed_command and isinstance(parsed_command, dict):
                     action = parsed_command.get("action")
+                    
                     if action == "change_property":
-                        # ... (Property change logic)
-                        st.success("명령 이해: 속성 변경")
+                        target = parsed_command.get("target")
+                        prop = parsed_command.get("property")
+                        val = parsed_command.get("value")
+                        if target == 'logo' and prop == 'scale':
+                            st.session_state.hat_config['logo_scale'] = float(val)
+                            st.success(f"명령 이해: 로고 스케일 {val}로 변경")
+                        elif target == 'brim' and prop == 'color':
+                            color_map = {"red": "#ff0000", "blue": "#0000ff", "green": "#008000", "black": "#000000", "gray": "#808080"}
+                            st.session_state.hat_config['brim_color'] = color_map.get(str(val).lower(), "#808080")
+                            st.success(f"명령 이해: 챙 색상 {val}로 변경")
+                        else:
+                            st.warning(f"LLM이 '{target} {prop}' 명령을 해석했지만, 유효한 작업이 아닙니다.")
+
                     elif action == "apply_style":
                         changes = parsed_command.get("changes", [])
                         st.success(f"명령 이해: '{parsed_command.get('style_name')}' 스타일 적용")
@@ -137,25 +146,25 @@ if bom_df is not None and persona_config is not None:
                             part_type = change.get("part_type")
                             new_model = change.get("new_model_file")
                             if part_type and new_model:
-                                # Update the model file for the corresponding part type
                                 part_found = False
                                 for part in st.session_state.hat_config['parts']:
                                     if part['type'].lower() == part_type.lower():
                                         part['model_file'] = new_model
                                         part_found = True
                                         break
-                                if not part_found: # If part type doesn't exist, add it
+                                if not part_found:
                                     st.session_state.hat_config['parts'].append({'type': part_type, 'model_file': new_model})
                                 st.info(f"-> {part_type}을(를) {new_model}로 교체합니다.")
+                    
+                    else:
+                        st.warning("LLM이 알 수 없는 액션을 반환했습니다.")
+
                     st.experimental_rerun()
                 else:
-                    st.error("LLM이 유효한 액션을 반환하지 않았습니다.")
-            else:
-                st.error("LLM이 명령을 이해하지 못했습니다.")
+                    st.error("LLM이 유효한 명령을 반환하지 못했습니다. 더 명확하게 말씀해주세요.")
 
         # 3D 뷰어 렌더링
         with st.container():
-            # ... (HTML/JS code for 3D viewer remains the same)
             github_user = "HWAN-OH"
             github_repo = "AI-Hat-Design-Studio"
             base_url = f"https://raw.githubusercontent.com/{github_user}/{github_repo}/main/models/"
