@@ -29,30 +29,23 @@ if 'hat_config' not in st.session_state:
     }
 
 # --- FIX: API 키를 가장 안전한 방식으로 불러옵니다 ---
-# 1. Streamlit Cloud의 'Secrets'에서 API 키를 먼저 찾아봅니다.
+# Streamlit Cloud의 'Secrets'에서 API 키를 직접 불러옵니다.
+# 이제 더 이상 사용자에게 키를 묻거나, 코드에 키를 노출할 필요가 없습니다.
 api_key = st.secrets.get("GOOGLE_AI_API_KEY")
-
-# 2. 만약 Secrets에 키가 없다면 (로컬에서 실행하는 경우 등), 사이드바에 입력창을 보여줍니다.
-if not api_key:
-    st.sidebar.warning("안전한 API 키가 등록되지 않았습니다. 로컬 테스트를 위해 키를 직접 입력해주세요.")
-    api_key = st.sidebar.text_input(
-        "Google AI API 키를 입력하세요", 
-        type="password",
-        help="Google AI Studio에서 API 키를 발급받아 여기에 붙여넣으세요."
-    )
 
 # --- LLM 연동을 위한 비동기 함수 ---
 async def parse_command_with_llm(command, key):
     if not key:
-        st.error("API 키가 없습니다. 사이드바에서 키를 입력하거나, Streamlit Cloud에 Secret을 등록해주세요.")
+        st.error("Google AI API Key가 Streamlit Secrets에 등록되지 않았습니다. 관리자에게 문의하세요.")
         return None
 
-    # ... (LLM 호출 로직은 이전과 동일)
     st.info(f"Forma가 명령을 해석하는 중입니다: '{command}'")
+    
     prompt = f"""
     You are an AI assistant that parses natural language commands for a 3D hat designer.
     Your task is to extract the target part, the property to change, and the new value from the user's command.
     Your response MUST be a valid JSON object with ONLY the keys "target", "property", and "value".
+
     Examples:
     - User: "make the logo 2 times bigger" -> {{"target": "logo", "property": "scale", "value": 2.0}}
     - User: "change brim color to blue" -> {{"target": "brim", "property": "color", "value": "blue"}}
@@ -77,7 +70,6 @@ st.header("Step 1: 'BoMi' - 부품 선택")
 uploaded_file = st.file_uploader("BOM 데이터 파일을 업로드하세요 (CSV)", type=["csv"])
 
 if uploaded_file is not None:
-    # ... (BoMi's logic remains the same)
     try:
         bom_df = pd.read_csv(uploaded_file)
         bom_df.columns = bom_df.columns.str.strip().str.lower()
@@ -119,7 +111,6 @@ if st.session_state.hat_config['parts']:
 
     # 3D 뷰어 렌더링
     with st.container():
-        # ... (HTML/JS code for 3D viewer remains the same)
         github_user = "HWAN-OH"
         github_repo = "AI-Hat-Design-Studio"
         base_url = f"https://raw.githubusercontent.com/{github_user}/{github_repo}/main/models/"
@@ -130,7 +121,7 @@ if st.session_state.hat_config['parts']:
         html_code = f"""
             <!DOCTYPE html><html><head><style>body{{margin:0;}}canvas{{display:block;}}</style></head>
             <body>
-                <script type="importmap">{{"imports":{{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}}}</script>
+                <script type="importmap">{{"imports":{{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}}}</script>
                 <script type="module">
                     import * as THREE from 'three';
                     import {{GLTFLoader}} from 'three/addons/loaders/GLTFLoader.js';
@@ -153,4 +144,3 @@ if st.session_state.hat_config['parts']:
             </body></html>
         """
         components.html(html_code, height=600, scrolling=False)
-
