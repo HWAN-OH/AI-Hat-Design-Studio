@@ -14,7 +14,7 @@ st.set_page_config(
 )
 
 # --- App Title & Description ---
-st.title("👒 AI 모자 디자인 스튜디오 v1.2 (Persona-Powered)")
+st.title("👒 AI 모자 디자인 스튜디오 v1.3 (Stable)")
 st.markdown("""
 **'Forma'에게 '페르소나'가 주입되었습니다!**
 이제 Forma는 단순한 번역기가 아닌, 모자 스타일에 대한 지식을 가진 'AI 디자이너'로서 당신의 말을 이해합니다.
@@ -100,7 +100,6 @@ if bom_df is not None and persona_config is not None:
     st.dataframe(bom_df)
 
     if st.button("초기 모델 조립", key="initial_assembly"):
-        # Load default parts for initial assembly
         initial_parts = bom_df[bom_df['part_type'].isin(['Crown', 'Brim', 'Strap'])]
         parts_to_load = []
         for index, row in initial_parts.iterrows():
@@ -121,7 +120,6 @@ if bom_df is not None and persona_config is not None:
                     available_parts_list = bom_df.to_dict('records')
                     parsed_command = asyncio.run(parse_command_with_llm(command, api_key, persona_config, available_parts_list))
                 
-                # --- FIX: Simplified and robust if/else structure ---
                 if parsed_command and isinstance(parsed_command, dict):
                     action = parsed_command.get("action")
                     
@@ -158,8 +156,11 @@ if bom_df is not None and persona_config is not None:
                     
                     else:
                         st.warning("LLM이 알 수 없는 액션을 반환했습니다.")
+                    
+                    # --- FIX: Use the official st.rerun() instead of the experimental one ---
+                    st.rerun()
+                    # --- END OF FIX ---
 
-                    st.experimental_rerun()
                 else:
                     st.error("LLM이 유효한 명령을 반환하지 못했습니다. 더 명확하게 말씀해주세요.")
 
