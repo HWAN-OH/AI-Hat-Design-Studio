@@ -8,8 +8,8 @@ from forma_engine import parse_command_with_llm # Import the engine
 
 # --- Page Configuration & Title ---
 st.set_page_config(page_title="AI Hat Design Studio", page_icon="👒", layout="wide")
-st.title("👒 AI 모자 디자인 스튜디오 v2.0 (Engine-Driven)")
-st.markdown("이제 **Forma 엔진**이 탑재되었습니다. 시스템은 더 똑똑하고, 코드는 더 깨끗해졌습니다.")
+st.title("👒 AI 모자 디자인 스튜디오 v2.1 (Stable Engine)")
+st.markdown("이제 **Forma 엔진**과의 통신 프로토콜이 완벽해졌습니다. 시스템은 더 안정적으로 작동합니다.")
 
 # --- Session State & Asset Loading ---
 if 'hat_config' not in st.session_state:
@@ -50,7 +50,10 @@ if bom_df is not None and persona_config is not None:
                 st.warning("Google AI API 키가 설정되지 않았습니다.")
             else:
                 with st.spinner(f"Forma 엔진이 '{command}' 명령을 해석하는 중..."):
-                    parsed_command = asyncio.run(parse_command_with_llm(command, api_key, persona_config))
+                    # --- FIX: Pass the 'available_parts' data to the engine ---
+                    available_parts_list = bom_df.to_dict('records')
+                    parsed_command = asyncio.run(parse_command_with_llm(command, api_key, persona_config, available_parts_list))
+                    # --- END OF FIX ---
                 
                 if parsed_command and "error" not in parsed_command:
                     action = parsed_command.get("action")
@@ -76,11 +79,34 @@ if bom_df is not None and persona_config is not None:
 
         # 3D Viewer Rendering Logic
         with st.container():
-            # ... (HTML/JS code for 3D viewer remains the same)
             github_user = "HWAN-OH"
             github_repo = "AI-Hat-Design-Studio"
             base_url = f"https://raw.githubusercontent.com/{github_user}/{github_repo}/main/models/"
             models_to_load = [{"type": part['type'], "url": base_url + part['model_file']} for part in st.session_state.hat_config['parts']]
             config_json = json.dumps(st.session_state.hat_config)
-            html_code = f""" ... """ # Assuming HTML/JS is correct
+            html_code = f"""
+                <!DOCTYPE html><html><head><style>body{{margin:0;}}canvas{{display:block;}}</style></head>
+                <body>
+                    <script type="importmap">{{"imports":{{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}}}</script>
+                    <script type="module">
+                        import * as THREE from 'three';
+                        import {{GLTFLoader}} from 'three/addons/loaders/GLTFLoader.js';
+                        import {{OrbitControls}} from 'three/addons/controls/OrbitControls.js';
+                        const scene=new THREE.Scene();scene.background=new THREE.Color(0xf0f2f5);
+                        const camera=new THREE.PerspectiveCamera(75,window.innerWidth/window.innerHeight,0.1,1000);camera.position.set(0,0.1,0.5);
+                        const renderer=new THREE.WebGLRenderer({{antialias:true}});renderer.setSize(window.innerWidth,window.innerHeight);document.body.appendChild(renderer.domElement);
+                        const ambientLight=new THREE.AmbientLight(0xffffff,1.5);scene.add(ambientLight);
+                        const directionalLight=new THREE.DirectionalLight(0xffffff,2);directionalLight.position.set(1,1,1);scene.add(directionalLight);
+                        const controls=new OrbitControls(camera,renderer.domElement);
+                        const hatConfig={config_json};const models={json.dumps(models_to_load)};
+                        const loader=new GLTFLoader();const hatParts=new THREE.Group();scene.add(hatParts);
+                        models.forEach(modelData=>{{loader.load(modelData.url,(gltf)=>{{const model=gltf.scene;
+                        if(modelData.type.toLowerCase()==='logo'){{model.scale.setScalar(hatConfig.logo_scale||1.0);}}
+                        if(modelData.type.toLowerCase()==='brim'){{model.traverse((child)=>{{if(child.isMesh){{child.material=child.material.clone();child.material.color.set(hatConfig.brim_color||"#808080");}}}});}}
+                        hatParts.add(model);}});}});
+                        function animate(){{requestAnimationFrame(animate);controls.update();renderer.render(scene,camera);}}
+                        animate();
+                    </script>
+                </body></html>
+            """
             components.html(html_code, height=600, scrolling=False)
