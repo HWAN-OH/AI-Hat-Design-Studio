@@ -1,0 +1,10 @@
+Part_ID,Part_Type,Name,Material,Color,Unit_Cost_USD,Supplier,Model_File
+C001,Crown,6-Panel Classic,Cotton,Navy,3.00,ABC Caps,crown_6panel.glb
+C002,Crown,Modern Snapback,Polyester,Black,3.20,ABC Caps,crown_snapback.glb
+C003,Crown,Bucket Hat,Canvas,Beige,3.50,CapFactory,crown_bucket.glb
+B001,Brim,Flat Brim,Cotton,Navy,1.20,BrimWorks,brim_flat.glb
+B002,Brim,Curved Brim,Cotton,Navy,1.10,BrimWorks,brim_curved.glb
+S001,Strap,Plastic Snap,Plastic,Black,0.80,SnapInc,strap_plastic.glb
+S002,Strap,Metal Buckle,Metal,Silver,1.50,BucklePro,strap_metal.glb
+L001,Logo,HDH Circle,Embroidery,White,0.50,InLogo,logo_circle.png
+L002,Logo,HDH Text,Embroidery,Black,0.50,InLogo,logo_text.png
